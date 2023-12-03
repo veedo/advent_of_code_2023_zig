@@ -41,7 +41,9 @@ pub fn main() !void {
     const stdout = bw.writer();
     var lines = try readlines(stdin);
     var grid = lines.items;
-    const sum = partNumberSum(grid);
+    // Part 1
+    //const sum = partNumberSum(grid);
+    const sum = gearSum(grid);
     try stdout.print("\n{d}\n", .{sum});
 
     try bw.flush();
@@ -53,6 +55,11 @@ fn isSymbol(char: u8) bool {
         else => return true,
     }
 }
+
+fn isGearLike(char: u8) bool {
+    return char == '*';
+}
+
 fn isNumber(char: u8) bool {
     switch (char) {
         '0'...'9' => return true,
@@ -66,12 +73,10 @@ const ExpandoNumbo = struct {
     xend: usize,
 };
 fn expandNumber(row: []const u8, x: usize) ExpandoNumbo {
-    std.debug.print("{s} - {d}\n", .{ row, x });
     var xstart = x;
     var xend = x;
     var i = x;
     xstart = while (i >= 0) : (i -= 1) {
-        //std.debug.print("i={d},r={c},t={any}\n", .{ i, row[i], isNumber(row[i]) });
         const isn = isNumber(row[i]);
         if (i == 0 and !isn) break 1;
         if (i == 0 and isn) break 0;
@@ -95,10 +100,7 @@ fn partNumberSum(grid: [][]u8) usize {
                 for (searchys) |sy| {
                     for (searchxs) |sx| {
                         if ((!(sx == x and sy == y)) and isNumber(grid[sy][sx])) {
-                            //std.debug.print("x{d}y{d}\n", .{ sx, sy });
                             var num: ExpandoNumbo = expandNumber(grid[sy], sx);
-                            //std.debug.print("num:{any}\n", .{num});
-
                             partsum += num.number;
                             @memset(grid[sy][num.xstart .. num.xend + 1], '.');
                         }
@@ -108,6 +110,46 @@ fn partNumberSum(grid: [][]u8) usize {
         }
     }
     return partsum;
+}
+
+fn inRange(comptime T: type, n: T, min: T, max: T) bool {
+    return n >= min and n <= max;
+}
+
+fn gearSum(grid: [][]u8) usize {
+    var gearsum: usize = 0;
+    for (grid, 0..) |row, y| {
+        for (row, 0..) |cell, x| {
+            if (isSymbol(cell)) {
+                const searchxs = [_]usize{ x, (std.math.sub(usize, x, 1) catch x), x + 1 };
+                const searchys = [_]usize{ y, (std.math.sub(usize, y, 1) catch y), y + 1 };
+                var neighbour_numbers = std.ArrayList(usize).init(allocator);
+                defer neighbour_numbers.deinit();
+                for (searchys) |sy| {
+                    for (searchxs) |sx| {
+                        if ((!(sx == x and sy == y)) and isNumber(grid[sy][sx])) {
+                            var num: ExpandoNumbo = expandNumber(grid[sy], sx);
+                            neighbour_numbers.append(num.number) catch {
+                                std.debug.print("Error appending number! {any}\n", .{num});
+                                continue;
+                            };
+                            if (y != sy and inRange(usize, x, num.xstart, num.xend)) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (neighbour_numbers.items.len == 2) {
+                    var gearpower: usize = 1;
+                    for (neighbour_numbers.items) |num| {
+                        gearpower *= num;
+                    }
+                    gearsum += gearpower;
+                }
+            }
+        }
+    }
+    return gearsum;
 }
 
 test "expando works" {
@@ -183,4 +225,31 @@ test "part1 test" {
     var grid = lines.items;
     const sum = partNumberSum(grid);
     try std.testing.expectEqual(sum, 4361);
+}
+
+test "part2 test" {
+    const exampletext =
+        \\467..114..
+        \\...*......
+        \\..35..633.
+        \\......#...
+        \\617*......
+        \\.....+.58.
+        \\..592.....
+        \\......755.
+        \\...$.*....
+        \\.664.598..
+    ;
+    std.debug.print("\n", .{});
+    arena = heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    allocator = arena.allocator();
+    var readfile = std.ArrayList(u8).init(std.testing.allocator);
+    defer readfile.deinit();
+    try readfile.writer().writeAll(exampletext);
+    var fbs = io.fixedBufferStream(readfile.items);
+    var lines = try readlines(fbs.reader());
+    var grid = lines.items;
+    const sum = gearSum(grid);
+    try std.testing.expectEqual(@as(usize, 467835), sum);
 }
