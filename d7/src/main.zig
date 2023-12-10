@@ -21,8 +21,8 @@ pub fn main() !void {
     _ = stdout;
     var lines = try readlines(stdin);
 
-    _ = try part1(lines.items);
-    //_ = try part2(lines.items);
+    //_ = try part1(lines.items);
+    _ = try part2(lines.items);
 
     try bw.flush();
 }
@@ -45,9 +45,27 @@ fn cardValue(card: u8) usize {
     };
 }
 
+fn cardValue2(card: u8) usize {
+    return switch (card) {
+        'J' => 0,
+        '2'...'9' => card - '2' + 1,
+        'T' => 9,
+        'Q' => 10,
+        'K' => 11,
+        'A' => 12,
+        else => unreachable,
+    };
+}
+
 fn cardStrength(card: u8, index: usize) usize {
     const shift = 8 * (4 - index);
     const value = cardValue(card);
+    return value << @intCast(shift);
+}
+
+fn cardStrength2(card: u8, index: usize) usize {
+    const shift = 8 * (4 - index);
+    const value = cardValue2(card);
     return value << @intCast(shift);
 }
 
@@ -71,7 +89,6 @@ fn handStrength(cards: [5]u8) usize {
     }
     std.sort.insertion(u8, &counts, {}, cmpGreaterThan);
     //std.debug.print("counts:{any}\n", .{counts});
-
     if (counts[0] == 5) {
         card_strength += 6 << (8 * 5);
     } else if (counts[0] == 4) {
@@ -85,7 +102,36 @@ fn handStrength(cards: [5]u8) usize {
     } else if (counts[0] == 2) {
         card_strength += 1 << (8 * 5);
     }
+    return card_strength;
+}
 
+fn handStrength2(cards: [5]u8) usize {
+    var card_strength: usize = 0;
+    var counts: [13]u8 = [_]u8{0} ** 13;
+    var num_jokers: u8 = 0;
+    for (cards, 0..) |card, idx| {
+        const cval = cardValue2(card);
+        card_strength += cardStrength2(card, idx);
+        if (cval == 0)
+            num_jokers += 1
+        else
+            counts[cval] += 1;
+    }
+    std.sort.insertion(u8, &counts, {}, cmpGreaterThan);
+    //std.debug.print("counts:{any}\n", .{counts});
+    if ((counts[0] + num_jokers) == 5) {
+        card_strength += 6 << (8 * 5);
+    } else if ((counts[0] + num_jokers) == 4) {
+        card_strength += 5 << (8 * 5);
+    } else if ((counts[0] + num_jokers) == 3 and counts[1] == 2) {
+        card_strength += 4 << (8 * 5);
+    } else if ((counts[0] + num_jokers) == 3) {
+        card_strength += 3 << (8 * 5);
+    } else if ((counts[0] + num_jokers) == 2 and counts[1] == 2) {
+        card_strength += 2 << (8 * 5);
+    } else if ((counts[0] + num_jokers) == 2) {
+        card_strength += 1 << (8 * 5);
+    }
     return card_strength;
 }
 
@@ -97,6 +143,18 @@ fn parseHand(line: []u8) !Hand {
         .bid = bid,
         .cards = cards,
         .strength = handStrength(cards),
+    };
+    return hand;
+}
+
+fn parseHand2(line: []u8) !Hand {
+    const bid: usize = try fmt.parseInt(usize, line[6..], 10);
+    //std.debug.print("bid:{d} ", .{bid});
+    const cards: [5]u8 = line[0..5].*;
+    const hand = Hand{
+        .bid = bid,
+        .cards = cards,
+        .strength = handStrength2(cards),
     };
     return hand;
 }
@@ -119,8 +177,21 @@ fn part1(lines: [][]u8) !usize {
     return winnings;
 }
 fn part2(lines: [][]u8) !usize {
-    _ = lines;
-    return 0;
+    var hands = try allocator.alloc(Hand, lines.len);
+    defer allocator.free(hands);
+
+    for (lines, 0..) |line, i| {
+        hands[i] = try parseHand2(line);
+    }
+
+    var winnings: usize = 0;
+    std.sort.insertion(Hand, hands, {}, cmpHandStrength);
+    //std.debug.print("hands:{any}\n", .{hands});
+    for (hands, 1..) |hand, i| {
+        winnings += i * hand.bid;
+    }
+    std.debug.print("\nwinnings:\n  {d}\n", .{winnings});
+    return winnings;
 }
 
 test "part1 test" {
@@ -165,5 +236,5 @@ test "part2 test" {
 
     var minloc: usize = try part2(lines.items);
 
-    try std.testing.expectEqual(@as(@TypeOf(minloc), 71503), minloc);
+    try std.testing.expectEqual(@as(@TypeOf(minloc), 5905), minloc);
 }
