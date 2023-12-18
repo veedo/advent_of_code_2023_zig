@@ -131,10 +131,7 @@ fn part2(lines: [][]u8) !usize {
             try all_next_steps.append(stp);
         }
     }
-    var minx: usize = sx;
-    var maxx: usize = sx;
     var miny: usize = sy;
-    var maxy: usize = sy;
     while (true) {
         if (all_next_steps.items.len == 0) break;
         var next_next_steps = std.ArrayList(UpdatedCell).init(allocator);
@@ -142,10 +139,7 @@ fn part2(lines: [][]u8) !usize {
             const next_steps = try putPipe(grid, nstep.x, nstep.y);
             defer allocator.free(next_steps);
             for (next_steps) |stp| {
-                minx = @min(minx, stp.x);
                 miny = @min(miny, stp.y);
-                maxx = @max(maxx, stp.x);
-                maxy = @max(maxy, stp.y);
                 try next_next_steps.append(stp);
             }
         }
@@ -166,13 +160,11 @@ fn part2(lines: [][]u8) !usize {
         }
         unreachable;
     };
-    _ = walk(grid, startx, starty, Direction.S);
+    walk(grid, startx, starty, Direction.S);
 
     var sum: usize = 0;
-    for (grid, 0..) |row, _y| {
-        _ = _y;
-        for (row, 0..) |cell, _x| {
-            _ = _x;
+    for (grid) |row| {
+        for (row) |cell| {
             if (cell) |cl| {
                 if (cl.tile) |tl| {
                     if (tl == Tile.Inside) sum += 1;
@@ -211,8 +203,8 @@ fn flood(grid: [][]?Location, x: usize, y: usize) void {
         }
     }
 }
-fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) ?Direction {
-    if (grid[y][x].?.visited) return null;
+fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) void {
+    if (grid[y][x].?.visited) return;
     const to = getnextdir(grid[y][x].?, from);
     //std.debug.print("walk:{d},{d},from:{any},to:{any}\n", .{ x, y, from, to });
     var extra: ?Coordinate = null;
@@ -267,7 +259,7 @@ fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) ?Direction {
         Direction.S => Direction.N,
     };
     grid[y][x].?.visited = true;
-    return walk(grid, nextx, nexty, nextfrom);
+    walk(grid, nextx, nexty, nextfrom);
 }
 
 test "part2 test 1" {
