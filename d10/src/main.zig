@@ -13,7 +13,9 @@ var allocator: std.mem.Allocator = undefined;
 
 pub fn main() !void {
     allocator = advent.allocator_init(heap.page_allocator);
+    part1z.allocator = allocator;
     defer advent.allocator_deinit();
+
     const stdin_file = io.getStdIn().reader();
     var br = io.bufferedReader(stdin_file);
     const stdin = br.reader();
@@ -23,8 +25,8 @@ pub fn main() !void {
     _ = stdout;
     var lines = try readlines(stdin);
 
-    _ = try part1(lines.items);
-    //_ = try part2(lines.items);
+    //_ = try part1(lines.items);
+    _ = try part2(lines.items);
 
     try bw.flush();
 }
@@ -164,7 +166,6 @@ fn part2(lines: [][]u8) !usize {
         }
         unreachable;
     };
-    //grid[starty][startx].?.visited = true;
     _ = walk(grid, startx, starty, Direction.S);
 
     var sum: usize = 0;
@@ -180,7 +181,7 @@ fn part2(lines: [][]u8) !usize {
         }
     }
 
-    std.debug.print("\ndistance:\n  {d}\n", .{sum});
+    std.debug.print("\nInside Tiles:\n  {d}\n", .{sum});
     return sum;
 }
 
@@ -200,10 +201,20 @@ fn getnextdir(loc: Location, from: Direction) Direction {
 }
 
 const Coordinate = struct { x: usize, y: usize };
+fn flood(grid: [][]?Location, x: usize, y: usize) void {
+    if (grid[y][x]) |cell| if (cell.tile) |tl| if (tl == Tile.Pipe or tl == Tile.Inside) return;
+    grid[y][x] = Location{ .tile = Tile.Inside };
+    for ((y - 1)..(y + 1)) |ny| {
+        for ((x - 1)..(x + 1)) |nx| {
+            if (nx == x and ny == y) continue;
+            flood(grid, nx, ny);
+        }
+    }
+}
 fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) ?Direction {
     if (grid[y][x].?.visited) return null;
     const to = getnextdir(grid[y][x].?, from);
-    std.debug.print("walk:{d},{d},from:{any},to:{any}\n", .{ x, y, from, to });
+    //std.debug.print("walk:{d},{d},from:{any},to:{any}\n", .{ x, y, from, to });
     var extra: ?Coordinate = null;
     const rightside: ?Coordinate = blk: {
         break :blk if (std.meta.eql(.{ from, to }, .{ Direction.W, Direction.E }))
@@ -236,19 +247,9 @@ fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) ?Direction {
             break :blk .{ .x = x + 1, .y = y };
         } else null;
     };
-    if (rightside) |rs| {
-        if (grid[rs.y][rs.x] == null or grid[rs.y][rs.x].?.tile != Tile.Pipe) {
-            grid[rs.y][rs.x] = Location{ .tile = Tile.Inside };
-        }
-    }
-    if (extra) |rs| {
-        if (grid[rs.y][rs.x] == null or grid[rs.y][rs.x].?.tile != Tile.Pipe) {
-            std.debug.print("Inside:{d},{d}\n", .{ rs.x, rs.y });
-            grid[rs.y][rs.x] = Location{ .tile = Tile.Inside };
-        }
-    }
-    // Check if slot "to the right" is empty (not a pipe)
-    // Mark as inside, flood fill
+    if (rightside) |rs| flood(grid, rs.x, rs.y);
+    if (extra) |rs| flood(grid, rs.x, rs.y);
+
     const nextx = switch (to) {
         Direction.W => x - 1,
         Direction.E => x + 1,
@@ -348,5 +349,32 @@ test "part2 test 3" {
         var lines = try readlines(fbs.reader());
         var res: usize = try part2(lines.items);
         try std.testing.expectEqual(@as(@TypeOf(res), 8), res);
+    }
+}
+
+test "part2 test 4" {
+    const exampletext =
+        \\..........
+        \\.S------7.
+        \\.|F----7|.
+        \\.||OOOO||.
+        \\.||OOOO||.
+        \\.|L-7F-JL7
+        \\.|II||III|
+        \\.L--J|III|
+        \\.....|III|
+        \\.....L---J
+    ;
+    std.debug.print("\n", .{});
+    allocator = advent.allocator_init(heap.page_allocator);
+    defer advent.allocator_deinit();
+    {
+        var readfile = std.ArrayList(u8).init(std.testing.allocator);
+        defer readfile.deinit();
+        try readfile.writer().writeAll(exampletext);
+        var fbs = io.fixedBufferStream(readfile.items);
+        var lines = try readlines(fbs.reader());
+        var res: usize = try part2(lines.items);
+        try std.testing.expectEqual(@as(@TypeOf(res), 11), res);
     }
 }

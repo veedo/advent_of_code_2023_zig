@@ -7,7 +7,7 @@ const io = std.io;
 const mem = std.mem;
 const fmt = std.fmt;
 const Tuple = std.meta.Tuple;
-var allocator: std.mem.Allocator = undefined;
+pub var allocator: std.mem.Allocator = undefined;
 
 const Location = struct {
     distance: ?usize = null,
