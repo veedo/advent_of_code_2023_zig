@@ -1,5 +1,7 @@
 const std = @import("std");
 const advent = @import("advent.zig");
+const part1z = @import("part1.zig");
+const part1 = part1z.part1;
 const readlines = advent.readlines;
 const inRange = advent.inRange;
 const heap = std.heap;
@@ -27,17 +29,31 @@ pub fn main() !void {
     try bw.flush();
 }
 
+const Direction = enum {
+    W,
+    N,
+    E,
+    S,
+};
+
+const Tile = enum {
+    Pipe,
+    Outside,
+    Inside,
+};
+
 const Location = struct {
-    distance: ?usize = null,
+    tile: ?Tile = null,
     hasWest: bool = false,
     hasNorth: bool = false,
     hasEast: bool = false,
     hasSouth: bool = false,
+    visited: bool = false,
 };
 
 fn parseChar(char: u8) ?Location {
     return switch (char) {
-        'S' => Location{ .distance = 0, .hasWest = true, .hasNorth = true, .hasEast = true, .hasSouth = true },
+        'S' => Location{ .tile = Tile.Pipe, .hasWest = true, .hasNorth = true, .hasEast = true, .hasSouth = true },
         '|' => Location{ .hasNorth = true, .hasSouth = true },
         '-' => Location{ .hasWest = true, .hasEast = true },
         'L' => Location{ .hasNorth = true, .hasEast = true },
@@ -49,47 +65,45 @@ fn parseChar(char: u8) ?Location {
 }
 
 const UpdatedCell = struct { x: usize, y: usize };
-fn putDistances(grid: [][]?Location, x: usize, y: usize, current_dist: usize) ![]UpdatedCell {
-    _ = current_dist;
+fn putPipe(grid: [][]?Location, x: usize, y: usize) ![]UpdatedCell {
     var updatedcells = std.ArrayList(UpdatedCell).init(allocator);
     const current_cell: Location = grid[y][x].?;
-    const next_dist = current_cell.distance.? + 1;
     if (x > 0) {
         const new = .{ .x = x - 1, .y = y };
         const west_exists = current_cell.hasWest and grid[new.y][new.x] != null;
-        if (west_exists and grid[new.y][new.x].?.distance == null and grid[new.y][new.x].?.hasEast) {
-            grid[new.y][new.x].?.distance = next_dist;
+        if (west_exists and grid[new.y][new.x].?.tile == null and grid[new.y][new.x].?.hasEast) {
+            grid[new.y][new.x].?.tile = Tile.Pipe;
             try updatedcells.append(UpdatedCell{ .x = new.x, .y = new.y });
         }
     }
     if (y > 0) {
         const new = .{ .x = x, .y = y - 1 };
         const north_exists = current_cell.hasNorth and grid[new.y][new.x] != null;
-        if (north_exists and grid[new.y][new.x].?.distance == null and grid[new.y][new.x].?.hasSouth) {
-            grid[new.y][new.x].?.distance = next_dist;
+        if (north_exists and grid[new.y][new.x].?.tile == null and grid[new.y][new.x].?.hasSouth) {
+            grid[new.y][new.x].?.tile = Tile.Pipe;
             try updatedcells.append(UpdatedCell{ .x = new.x, .y = new.y });
         }
     }
     if (x < grid[0].len) {
         const new = .{ .x = x + 1, .y = y };
         const east_exists = current_cell.hasEast and grid[new.y][new.x] != null;
-        if (east_exists and grid[new.y][new.x].?.distance == null and grid[new.y][new.x].?.hasWest) {
-            grid[new.y][new.x].?.distance = next_dist;
+        if (east_exists and grid[new.y][new.x].?.tile == null and grid[new.y][new.x].?.hasWest) {
+            grid[new.y][new.x].?.tile = Tile.Pipe;
             try updatedcells.append(UpdatedCell{ .x = new.x, .y = new.y });
         }
     }
     if (y < grid.len) {
         const new = .{ .x = x, .y = y + 1 };
         const south_exists = current_cell.hasSouth and grid[new.y][new.x] != null;
-        if (south_exists and grid[new.y][new.x].?.distance == null and grid[new.y][new.x].?.hasNorth) {
-            grid[new.y][new.x].?.distance = next_dist;
+        if (south_exists and grid[new.y][new.x].?.tile == null and grid[new.y][new.x].?.hasNorth) {
+            grid[new.y][new.x].?.tile = Tile.Pipe;
             try updatedcells.append(UpdatedCell{ .x = new.x, .y = new.y });
         }
     }
     return updatedcells.items;
 }
 
-fn part1(lines: [][]u8) !usize {
+fn part2(lines: [][]u8) !usize {
     const width = lines[0].len;
     const height = lines.len;
 
@@ -100,39 +114,36 @@ fn part1(lines: [][]u8) !usize {
         grid[y] = try allocator.alloc(?Location, width);
         for (line, 0..) |chr, x| {
             grid[y][x] = parseChar(chr);
-            if (grid[y][x] != null and grid[y][x].?.distance == 0) {
+            if (grid[y][x] != null and grid[y][x].?.tile == Tile.Pipe) {
                 sx = x;
                 sy = y;
             }
         }
     }
 
-    std.debug.print("\nstartx:{d},y:{d},v:{any}\n\n", .{ sx, sy, grid[sy][sx] });
-    //for (grid, 0..) |row, y| {
-    //    for (row, 0..) |cell, x| {
-    //        std.debug.print("x:{d},y:{d},v:{any}\n", .{ x, y, cell });
-    //    }
-    //}
-
-    var currx: usize = sx;
-    var curry: usize = sy;
-    var currdist: usize = 0;
     var all_next_steps = std.ArrayList(UpdatedCell).init(allocator);
     {
-        const next_steps = try putDistances(grid, currx, curry, currdist);
+        const next_steps = try putPipe(grid, sx, sy);
         defer allocator.free(next_steps);
         for (next_steps) |stp| {
             try all_next_steps.append(stp);
         }
     }
+    var minx: usize = sx;
+    var maxx: usize = sx;
+    var miny: usize = sy;
+    var maxy: usize = sy;
     while (true) {
         if (all_next_steps.items.len == 0) break;
-        currdist += 1;
         var next_next_steps = std.ArrayList(UpdatedCell).init(allocator);
         for (all_next_steps.items) |nstep| {
-            const next_steps = try putDistances(grid, nstep.x, nstep.y, currdist);
+            const next_steps = try putPipe(grid, nstep.x, nstep.y);
             defer allocator.free(next_steps);
             for (next_steps) |stp| {
+                minx = @min(minx, stp.x);
+                miny = @min(miny, stp.y);
+                maxx = @max(maxx, stp.x);
+                maxy = @max(maxy, stp.y);
                 try next_next_steps.append(stp);
             }
         }
@@ -140,71 +151,135 @@ fn part1(lines: [][]u8) !usize {
         all_next_steps = next_next_steps;
     }
 
-    std.debug.print("\ndistance:\n  {d}\n", .{currdist});
-    return currdist;
-}
+    grid[sy][sx].?.hasWest = if (grid[sy][sx - 1]) |cell| cell.hasEast else false;
+    grid[sy][sx].?.hasNorth = if (grid[sy - 1][sx]) |cell| cell.hasSouth else false;
+    grid[sy][sx].?.hasEast = if (grid[sy][sx + 1]) |cell| cell.hasEast else false;
+    grid[sy][sx].?.hasSouth = if (grid[sy + 1][sx]) |cell| cell.hasNorth else false;
+    std.debug.print("start:{any}\n", .{grid[sy][sx].?});
 
-fn part2(lines: [][]u8) !usize {
-    _ = lines;
+    const starty = miny;
+    var startx = blk: {
+        for (grid[starty], 0..) |cell, x| {
+            if (cell) |cl| if (cl.tile == Tile.Pipe) break :blk x;
+        }
+        unreachable;
+    };
+    //grid[starty][startx].?.visited = true;
+    _ = walk(grid, startx, starty, Direction.S);
 
-    std.debug.print("\nsum:\n  {d}\n", .{0});
-    return 0;
-}
-
-test "part1 test 1" {
-    const exampletext =
-        \\..F7.
-        \\.FJ|.
-        \\SJ.L7
-        \\|F--J
-        \\LJ...
-    ;
-
-    std.debug.print("\n", .{});
-    allocator = advent.allocator_init(heap.page_allocator);
-    defer advent.allocator_deinit();
-
-    {
-        var readfile = std.ArrayList(u8).init(std.testing.allocator);
-        defer readfile.deinit();
-        try readfile.writer().writeAll(exampletext);
-        var fbs = io.fixedBufferStream(readfile.items);
-        var lines = try readlines(fbs.reader());
-
-        var res: usize = try part1(lines.items);
-        try std.testing.expectEqual(@as(@TypeOf(res), 8), res);
+    var sum: usize = 0;
+    for (grid, 0..) |row, _y| {
+        _ = _y;
+        for (row, 0..) |cell, _x| {
+            _ = _x;
+            if (cell) |cl| {
+                if (cl.tile) |tl| {
+                    if (tl == Tile.Inside) sum += 1;
+                }
+            }
+        }
     }
+
+    std.debug.print("\ndistance:\n  {d}\n", .{sum});
+    return sum;
 }
-test "part1 test 2" {
-    const exampletext =
-        \\-L|F7
-        \\7S-7|
-        \\L|7||
-        \\-L-J|
-        \\L|-JF
-    ;
 
-    std.debug.print("\n", .{});
-    allocator = advent.allocator_init(heap.page_allocator);
-    defer advent.allocator_deinit();
-
-    {
-        var readfile = std.ArrayList(u8).init(std.testing.allocator);
-        defer readfile.deinit();
-        try readfile.writer().writeAll(exampletext);
-        var fbs = io.fixedBufferStream(readfile.items);
-        var lines = try readlines(fbs.reader());
-
-        var res: usize = try part1(lines.items);
-        try std.testing.expectEqual(@as(@TypeOf(res), 4), res);
+const directions = [_]Direction{ Direction.W, Direction.N, Direction.E, Direction.S };
+fn getnextdir(loc: Location, from: Direction) Direction {
+    for (directions) |todir| {
+        if (todir != from) {
+            switch (todir) {
+                Direction.W => if (loc.hasWest) return todir,
+                Direction.N => if (loc.hasNorth) return todir,
+                Direction.E => if (loc.hasEast) return todir,
+                Direction.S => if (loc.hasSouth) return todir,
+            }
+        }
     }
+    unreachable;
 }
 
-test "part2 test" {
+const Coordinate = struct { x: usize, y: usize };
+fn walk(grid: [][]?Location, x: usize, y: usize, from: Direction) ?Direction {
+    if (grid[y][x].?.visited) return null;
+    const to = getnextdir(grid[y][x].?, from);
+    std.debug.print("walk:{d},{d},from:{any},to:{any}\n", .{ x, y, from, to });
+    var extra: ?Coordinate = null;
+    const rightside: ?Coordinate = blk: {
+        break :blk if (std.meta.eql(.{ from, to }, .{ Direction.W, Direction.E }))
+            .{ .x = x, .y = y + 1 }
+        else if (std.meta.eql(.{ from, to }, .{ Direction.E, Direction.W }))
+            .{ .x = x, .y = y - 1 }
+        else if (std.meta.eql(.{ from, to }, .{ Direction.N, Direction.S }))
+            .{ .x = x - 1, .y = y }
+        else if (std.meta.eql(.{ from, to }, .{ Direction.S, Direction.N }))
+            .{ .x = x + 1, .y = y }
+        else if (std.meta.eql(.{ from, to }, .{ Direction.W, Direction.N })) {
+            extra = .{ .x = x, .y = y + 1 };
+            break :blk .{ .x = x + 1, .y = y };
+        } else if (std.meta.eql(.{ from, to }, .{ Direction.W, Direction.S }))
+            null
+        else if (std.meta.eql(.{ from, to }, .{ Direction.E, Direction.N }))
+            null
+        else if (std.meta.eql(.{ from, to }, .{ Direction.E, Direction.S })) {
+            extra = .{ .x = x, .y = y - 1 };
+            break :blk .{ .x = x - 1, .y = y };
+        } else if (std.meta.eql(.{ from, to }, .{ Direction.N, Direction.W }))
+            null
+        else if (std.meta.eql(.{ from, to }, .{ Direction.N, Direction.E })) {
+            extra = .{ .x = x, .y = y + 1 };
+            break :blk .{ .x = x - 1, .y = y };
+        } else if (std.meta.eql(.{ from, to }, .{ Direction.S, Direction.E }))
+            null
+        else if (std.meta.eql(.{ from, to }, .{ Direction.S, Direction.W })) {
+            extra = .{ .x = x, .y = y - 1 };
+            break :blk .{ .x = x + 1, .y = y };
+        } else null;
+    };
+    if (rightside) |rs| {
+        if (grid[rs.y][rs.x] == null or grid[rs.y][rs.x].?.tile != Tile.Pipe) {
+            grid[rs.y][rs.x] = Location{ .tile = Tile.Inside };
+        }
+    }
+    if (extra) |rs| {
+        if (grid[rs.y][rs.x] == null or grid[rs.y][rs.x].?.tile != Tile.Pipe) {
+            std.debug.print("Inside:{d},{d}\n", .{ rs.x, rs.y });
+            grid[rs.y][rs.x] = Location{ .tile = Tile.Inside };
+        }
+    }
+    // Check if slot "to the right" is empty (not a pipe)
+    // Mark as inside, flood fill
+    const nextx = switch (to) {
+        Direction.W => x - 1,
+        Direction.E => x + 1,
+        else => x,
+    };
+    const nexty = switch (to) {
+        Direction.N => y - 1,
+        Direction.S => y + 1,
+        else => y,
+    };
+    const nextfrom = switch (to) {
+        Direction.W => Direction.E,
+        Direction.N => Direction.S,
+        Direction.E => Direction.W,
+        Direction.S => Direction.N,
+    };
+    grid[y][x].?.visited = true;
+    return walk(grid, nextx, nexty, nextfrom);
+}
+
+test "part2 test 1" {
     const exampletext =
-        \\0 3 6 9 12 15
-        \\1 3 6 10 15 21
-        \\10 13 16 21 30 45
+        \\...........
+        \\.S-------7.
+        \\.|F-----7|.
+        \\.||OOOOO||.
+        \\.||OOOOO||.
+        \\.|L-7OF-J|.
+        \\.|II|O|II|.
+        \\.L--JOL--J.
+        \\.....O.....
     ;
 
     std.debug.print("\n", .{});
@@ -219,7 +294,59 @@ test "part2 test" {
         var lines = try readlines(fbs.reader());
 
         var res: usize = try part2(lines.items);
+        try std.testing.expectEqual(@as(@TypeOf(res), 4), res);
+    }
+}
 
-        try std.testing.expectEqual(@as(@TypeOf(res), 2), res);
+test "part2 test 2" {
+    const exampletext =
+        \\..........
+        \\.S------7.
+        \\.|F----7|.
+        \\.||OOOO||.
+        \\.||OOOO||.
+        \\.|L-7F-J|.
+        \\.|II||II|.
+        \\.L--JL--J.
+        \\..........
+    ;
+    std.debug.print("\n", .{});
+    allocator = advent.allocator_init(heap.page_allocator);
+    defer advent.allocator_deinit();
+    {
+        var readfile = std.ArrayList(u8).init(std.testing.allocator);
+        defer readfile.deinit();
+        try readfile.writer().writeAll(exampletext);
+        var fbs = io.fixedBufferStream(readfile.items);
+        var lines = try readlines(fbs.reader());
+        var res: usize = try part2(lines.items);
+        try std.testing.expectEqual(@as(@TypeOf(res), 4), res);
+    }
+}
+
+test "part2 test 3" {
+    const exampletext =
+        \\.F----7F7F7F7F-7....
+        \\.|F--7||||||||FJ....
+        \\.||.FJ||||||||L7....
+        \\FJL7L7LJLJ||LJ.L-7..
+        \\L--J.L7...LJS7F-7L7.
+        \\....F-J..F7FJ|L7L7L7
+        \\....L7.F7||L7|.L7L7|
+        \\.....|FJLJ|FJ|F7|.LJ
+        \\....FJL-7.||.||||...
+        \\....L---J.LJ.LJLJ...
+    ;
+    std.debug.print("\n", .{});
+    allocator = advent.allocator_init(heap.page_allocator);
+    defer advent.allocator_deinit();
+    {
+        var readfile = std.ArrayList(u8).init(std.testing.allocator);
+        defer readfile.deinit();
+        try readfile.writer().writeAll(exampletext);
+        var fbs = io.fixedBufferStream(readfile.items);
+        var lines = try readlines(fbs.reader());
+        var res: usize = try part2(lines.items);
+        try std.testing.expectEqual(@as(@TypeOf(res), 8), res);
     }
 }
