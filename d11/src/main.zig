@@ -21,7 +21,7 @@ pub fn main() !void {
     _ = stdout;
     var lines = try readlines(stdin);
 
-    _ = try part1(lines.items);
+    _ = try universe_spacing(lines.items, 1_000_000);
     //_ = try part2(lines.items);
 
     try bw.flush();
@@ -79,7 +79,7 @@ inline fn absdiff(a: usize, b: usize) usize {
     return if (a > b) a - b else b - a;
 }
 
-fn part1(lines: [][]u8) !usize {
+fn universe_spacing(lines: [][]u8, expansion_rate: usize) !usize {
     var parsed = try parseMap(lines);
     var galaxies = parsed.galaxies;
     var empty_rows = parsed.empty_rows;
@@ -95,14 +95,14 @@ fn part1(lines: [][]u8) !usize {
         {
             var shift: usize = 0;
             for (empty_rows) |row| {
-                if (row < gal.y) shift += 1;
+                if (row < gal.y) shift += expansion_rate - 1;
             }
             galaxies[i].y += shift;
         }
         {
             var shift: usize = 0;
             for (empty_cols) |col| {
-                if (col < gal.x) shift += 1;
+                if (col < gal.x) shift += expansion_rate - 1;
             }
             galaxies[i].x += shift;
         }
@@ -120,14 +120,6 @@ fn part1(lines: [][]u8) !usize {
             sum += dist;
         }
     }
-
-    std.debug.print("\nsum:\n  {d}\n", .{sum});
-    return sum;
-}
-
-fn part2(lines: [][]u8) !usize {
-    _ = lines;
-    var sum: usize = 0;
 
     std.debug.print("\nsum:\n  {d}\n", .{sum});
     return sum;
@@ -158,7 +150,7 @@ test "part1 test" {
         var fbs = io.fixedBufferStream(readfile.items);
         var lines = try readlines(fbs.reader());
 
-        var res: usize = try part1(lines.items);
+        var res: usize = try universe_spacing(lines.items, 2);
 
         try std.testing.expectEqual(@as(@TypeOf(res), 374), res);
     }
@@ -189,8 +181,8 @@ test "part2 test" {
         var fbs = io.fixedBufferStream(readfile.items);
         var lines = try readlines(fbs.reader());
 
-        var res: usize = try part2(lines.items);
+        var res: usize = try universe_spacing(lines.items, 100);
 
-        try std.testing.expectEqual(@as(@TypeOf(res), 2), res);
+        try std.testing.expectEqual(@as(@TypeOf(res), 8410), res);
     }
 }
